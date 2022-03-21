@@ -9,6 +9,7 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import QMainWindow, QApplication, QHeaderView
 
 import myUtils
+from JsRunThreadManage import JsRunThreadManage
 from ui.mainForm import Ui_MainWindow
 
 
@@ -21,6 +22,8 @@ class Main(QMainWindow, Ui_MainWindow):
         self.updateInputFormat()
         self.resetJsFunctionITextEdit()
         self.browser = QWebEngineView()
+        self.browser.loadFinished.connect(self.browserLoaded)
+        self.threadManage = JsRunThreadManage()
         # 设置结果表头
         self.resultHeaderList = ["序号", "输入", "输出"]
         self.resultTable.setColumnCount(len(self.resultHeaderList))
@@ -95,6 +98,10 @@ class Main(QMainWindow, Ui_MainWindow):
             self.errorLogTextEdit.append(finalLog)
             self.errorLogTextEdit.moveCursor(QTextCursor.End)
 
+    def writeErrorLog(self, logStr):
+        self.writeLog("运行发生异常，请确认错误日志")
+        self.writeLog(logStr, 1)
+
     def resetJsFunctionITextEdit(self):
         functionModelStr = ''' function process(nowInputVal){\n    var nowOutputVal = "";\n    nowInputVal=String(nowInputVal);\n    // 逻辑代码\n    nowOutputVal=nowInputVal;\n    \n    return nowOutputVal;\n}'''
         self.jsFunTextEdit.setText(functionModelStr)
@@ -160,38 +167,51 @@ class Main(QMainWindow, Ui_MainWindow):
     def runJs(self):
         checkFlag, checkStr = self.checkInput()
         if not checkFlag:
-            self.writeLog("运行发生异常，请确认错误日志")
-            self.writeLog(checkStr, 1)
+            self.writeErrorLog(checkStr)
         else:
-            url = self.urlLineEdit.text()
-            while url[-1] == "/":
-                url = url[:-1]
-            self.writeLog("开始执行自定义JS函数")
-            self.browser.load(QUrl(url))
-            nowJsFunction = self.jsFunTextEdit.toPlainText()
-            nowJsFunction = nowJsFunction.replace("\"", "\\\"")
-            nowJsFunction = nowJsFunction.replace("\n", "\\n\\\n")
-            nowJsStr = '''var script = document.createElement("script");
-script.type = "text/javascript";
-script.text = "{0}";
-document.body.appendChild(script);'''.format(nowJsFunction)
-            self.browser.page().runJavaScript(nowJsStr)
-            myUtils.clearTalbe(self.resultTable)
-            for tmpIndex, tmpInput in enumerate(self.inputFormattedList):
-                nowInput = tmpInput
-                self.writeLog("使用输入值({1}/{2})：{0}".format(nowInput, tmpIndex + 1, len(self.inputFormattedList)))
-                nowInputFormat = nowInput.replace("\"", "\\\"")
-                nowJsStr = "process(\"{0}\")".format(nowInputFormat)
-                self.browser.page().runJavaScript(nowJsStr, self.jsCallBack)
+            try:
+                url = self.urlLineEdit.text()
+                while url[-1] == "/":
+                    url = url[:-1]
+                logStr = "开始加载URL：{0}".format(url)
+                self.writeLog(logStr)
+                self.browser.load(QUrl(url))
+            except Exception as ex:
+                logStr = "加载URL时出现异常：{0}".format(str(ex))
+                self.writeErrorLog(logStr)
 
-            self.writeLog("执行完成，结果请前往输出tab查看")
+    def browserLoaded(self, ifSuccessFlag):
+        if ifSuccessFlag:
+            self.writeLog("URL加载完成")
+            try:
+                myUtils.clearTalbe(self.resultTable)
+                nowJsFunction = self.jsFunTextEdit.toPlainText()
+                nowJsFunction = myUtils.changeJsToString(nowJsFunction)
+                nowJsStr = '''var script = document.createElement("script");
+        script.type = "text/javascript";
+        script.text = "{0}";
+        document.body.appendChild(script);'''.format(nowJsFunction)
+                self.browser.page().runJavaScript(nowJsStr)
+                self.threadManage = JsRunThreadManage(self.inputFormattedList, self.browser)
+                self.threadManage.signal_result_log.connect(self.jsCallBack)
+                self.threadManage.signal_info_log.connect(self.writeLog)
+                self.threadManage.start()
+            except Exception as ex:
+                logStr = "启动JS函数执行线程管理线程时出现异常：{0}".format(str(ex))
+                self.writeErrorLog(logStr)
+        else:
+            logStr = "无法加载URL，请检查网络连接"
+            self.writeLog(logStr)
 
-    def jsCallBack(self, result):
+        # self.browser.page().runJavaScript(nowJsStr, self.jsCallBack)
+
+    def jsCallBack(self, inputStr, result):
         nowTableRowCount = self.resultTable.rowCount()
         self.resultTable.insertRow(nowTableRowCount)
         self.resultTable.setItem(nowTableRowCount, 0, myUtils.createTableItem(str(nowTableRowCount + 1)))
-        self.resultTable.setItem(nowTableRowCount, 1,
-                                 myUtils.createTableItem(self.inputFormattedList[nowTableRowCount]))
+        # self.resultTable.setItem(nowTableRowCount, 1,
+        #                          myUtils.createTableItem(self.inputFormattedList[nowTableRowCount]))
+        self.resultTable.setItem(nowTableRowCount, 1, myUtils.createTableItem(inputStr))
         self.resultTable.setItem(nowTableRowCount, 2, myUtils.createTableItem(result))
 
     def closeEvent(self, event):

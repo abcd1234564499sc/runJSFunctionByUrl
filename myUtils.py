@@ -5,11 +5,11 @@ import os
 import re
 import shutil
 
+import openpyxl as oxl
 import requests
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidgetItem
 from bs4 import BeautifulSoup
-import openpyxl as oxl
 
 # 全局变量区域
 borderNumDic = {-1: None, 0: "thin"}
@@ -155,10 +155,12 @@ def checkIfUrl(urlStr):
     checkFlag = urlRegex.match(urlStr)
     return checkFlag
 
+
 # 传入一个QTableWidget对象，清空这个表格
 def clearTalbe(tableObject):
     while tableObject.rowCount() != 0:
         tableObject.removeRow(tableObject.rowCount() - 1)
+
 
 # 创建一个QTableWidgetItem对象，传入文本参数text，以及verAlign和horAlign两个整形参数控制文本位置
 # verAlign的值含义如下：-1 靠左、0 居中、1 靠右
@@ -169,6 +171,7 @@ def createTableItem(text, verAlign=0, horAlign=0):
     horAlignDic = {-1: Qt.AlignBottom, 0: Qt.AlignHCenter, 1: Qt.AlignTop}
     tmpItem.setTextAlignment(verAlignDic[verAlign] | horAlignDic[horAlign])
     return tmpItem
+
 
 # 删除指定路径的文件,传入一个绝对路径,返回一个布尔变量以及一个字符串变量，
 # 布尔变量为True表示是否删除成功,若为False则字符串变量中写入错误信息
@@ -185,6 +188,7 @@ def deleteFile(filePath):
         reStr = "未找到指定路径的文件"
         deleteFlag = False
     return deleteFlag, reStr
+
 
 # 获得excell的常用样式
 def getExcellStyleDic():
@@ -305,3 +309,32 @@ def saveExcell(wb, saveName):
         deleteFile(savePath)
     wb.save(savePath)
     return True
+
+
+def writeToFile(content, fileName):
+    filePath = os.path.join(os.getcwd(), fileName)
+    with open(fileName, "w+", encoding="utf-8") as fr:
+        fr.write(content)
+    return filePath
+
+
+def changeJsToString(jsStr):
+    # 将传入的JS函数字符串转换为字符串常量格式
+    resultStr = ""
+    # 处理注释和空行
+    tmpList = jsStr.split("\n")
+    tmpSolvedList = []
+    for nowLine in tmpList:
+        tmpLine = nowLine
+        while len(tmpLine) != 0 and tmpLine[0] == " ":
+            tmpLine = tmpLine[1:]
+        if len(tmpLine) == 0 or tmpLine[:2] == "//":
+            continue
+        else:
+            tmpSolvedList.append(nowLine)
+    jsStr = "\n".join(tmpSolvedList)
+
+    resultStr = jsStr.replace("{\n", "{").replace("}\n", "}").replace(";\n", ";").replace("\n", "\\\\n").replace("\\n",
+                                                                                                                 "\\\\n").replace(
+        "\"", "\\\"")
+    return resultStr
