@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>HelpForm</class>
+ <widget class="QDialog" name="HelpForm">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>621</width>
+    <height>377</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="label">
+     <property name="font">
+      <font>
+       <family>方正黑体简体</family>
+       <pointsize>12</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>使用说明</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="Line" name="line">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="plainTextEdit">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="font">
+      <font>
+       <family>方正黑体简体</family>
+       <pointsize>11</pointsize>
+      </font>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+     <property name="plainText">
+      <string>（1）在URL框内输入对应的URL    
+
+（2）勾选需要数量的输入，输入内容会按照鱼叉模式（Pitchfork）构建     
+
+（3）调整自动生成的输入格式，每个输入框的输入使用$%$输入值1$%$、$%$输入值2$%$ 表示，插入形式与brupsuite爆破报文形式类似  
+
+（4）调整js处理函数标签内自动生成的js代码，process函数名不能调整，    
+
+（5）点击运行按钮，若一切正常，输出结果将会显示在 结果 标签处，否则结果处会显示None，这时候请检查js处理函数处的输入是否符合js语法    
+
+PS:如使用遇到问题请提交至github，地址如下：
+https://github.com/abcd1234564499sc/runJSFunctionByUrl</string>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

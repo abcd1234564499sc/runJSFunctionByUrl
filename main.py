@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 # coding=utf-8
+import os
 import sys
 
-import openpyxl as oxl
+from PyQt5 import QtNetwork
 from PyQt5.QtCore import QUrl
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import QMainWindow, QApplication, QHeaderView
 
 import myUtils
+from ConfigWindow import ConfigWindow
+from ExportExcellThread import ExportExcellThread
+from HelpWindow import HelpWindow
 from JsRunThreadManage import JsRunThreadManage
+from LoadBrowserThread import LoadBrowserThread
 from ui.mainForm import Ui_MainWindow
 
 
@@ -21,9 +26,16 @@ class Main(QMainWindow, Ui_MainWindow):
         self.inputFormattedList = []
         self.updateInputFormat()
         self.resetJsFunctionITextEdit()
+        userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36"
         self.browser = QWebEngineView()
+        self.browser.page().profile().setHttpUserAgent(userAgent)
         self.browser.loadFinished.connect(self.browserLoaded)
+        self.browser.setObjectName("webView")
+        self.horizontalLayout_5.addWidget(self.browser)
+        self.browserLoadThread = LoadBrowserThread()
         self.threadManage = JsRunThreadManage()
+        self.confFileName = "工具箱配置.conf"
+        self.confHeadList = ["是否使用代理", "代理IP", "代理端口"]
         # 设置结果表头
         self.resultHeaderList = ["序号", "输入", "输出"]
         self.resultTable.setColumnCount(len(self.resultHeaderList))
@@ -31,6 +43,43 @@ class Main(QMainWindow, Ui_MainWindow):
         self.resultTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.resultTable.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.resultTable.verticalHeader().setVisible(False)
+
+        self.confDic = self.initConfFile()
+        self.confWindow = ConfigWindow(self.confDic)
+        self.helpWindow = HelpWindow()
+
+    # 初始化配置文件，生成配置文件并返回一个配置字典
+    # 字典结构为：{
+    # "confFileName":配置文件文件名,
+    # "ifProxy":是否开启代理，
+    # "proxyIp":代理IP,
+    # "proxyPort":代理端口
+    # }
+    def initConfFile(self):
+        defaultIfProxy = 0
+        defaultProxyIp = ""
+        defaultProxyPort = ""
+        defaultConfHeaderList = self.confHeadList
+        confDic = {defaultConfHeaderList[0]: defaultIfProxy, defaultConfHeaderList[1]: defaultProxyIp,
+                   defaultConfHeaderList[2]: defaultProxyPort}
+
+        # 判断是否存在配置文件
+        confFilePath = os.path.join(os.getcwd(), self.confFileName)
+        if not os.path.exists(confFilePath):
+            myUtils.writeToConfFile(confFilePath, confDic)
+            confDic["confHeader"] = defaultConfHeaderList
+        else:
+            confDic = myUtils.readConfFile(confFilePath)
+        headerList = confDic["confHeader"]
+
+        reConfDic = {"confFilePath": confFilePath, "confHeaderList": headerList,
+                     "ifProxy": True if int(confDic[headerList[0]]) == 1 else False,
+                     "proxyIp": confDic[headerList[1]], "proxyPort": confDic[headerList[2]]}
+
+        # 更新代理设置
+        self.updateProxy(reConfDic["ifProxy"], reConfDic["proxyIp"], reConfDic["proxyPort"])
+
+        return reConfDic
 
     def updateInputFormat(self, checkState=0):
         # 遍历4个输入框的复选框，根据选择情况构建inputFormatLineEdit的值
@@ -224,35 +273,51 @@ class Main(QMainWindow, Ui_MainWindow):
         if nowResultCount == 0:
             self.writeLog("当前无可导出数据")
             return
-        filename = "导出文件 " + myUtils.getNowSeconed()
-        filename = myUtils.updateFileNameStr(filename)
-        # 创建一个excell文件对象
-        wb = oxl.Workbook()
-        # 创建URL扫描结果子表
-        ws = wb.active
-        ws.title = "JS函数执行结果"
-        # 创建表头
-        myUtils.writeExcellHead(ws, self.resultHeaderList)
+        self.exportExcellThread = ExportExcellThread(self.resultTable, 10000, self.resultHeaderList)
+        self.exportExcellThread.signal_end.connect(self.exportCompleted)
+        self.exportExcellThread.signal_log.connect(self.writeLog)
+        self.exportExcellThread.start()
+        self.writeLog("开始导出文件")
+        self.exportResultButton.setEnabled(False)
 
-        # 遍历当前结果
-        for rowIndex in range(nowResultCount):
-            # 获取当前行的值
-            nowIndex = nowTable.item(rowIndex, 0).text()
-            nowInput = nowTable.item(rowIndex, 1).text()
-            nowResultStr = nowTable.item(rowIndex, 2).text()
+    def exportCompleted(self, result, logStr):
+        if result:
+            self.writeLog(logStr)
+        else:
+            self.writeErrorLog(logStr)
+        self.exportResultButton.setEnabled(True)
 
-            # 将值写入excell对象
-            myUtils.writeExcellCell(ws, rowIndex + 2, 1, nowIndex, 0, True)
-            myUtils.writeExcellCell(ws, rowIndex + 2, 2, nowInput, 0, True)
-            myUtils.writeExcellCell(ws, rowIndex + 2, 3, nowResultStr, 0, True)
-            myUtils.writeExcellSpaceCell(ws, rowIndex + 2, 4)
+    def openConfigWindow(self):
+        self.confWindow = ConfigWindow(self.confDic)
+        self.confWindow.signal_end.connect(self.confWindowClosed)
+        self.confWindow.show()
 
-        # 设置列宽
-        colWidthArr = [7, 20, 60]
-        myUtils.setExcellColWidth(ws, colWidthArr)
-        # 保存文件
-        myUtils.saveExcell(wb, saveName=filename)
-        self.writeLog("成功保存文件：{0}.xlsx 至当前文件夹".format(filename))
+    def confWindowClosed(self):
+        # 更新当前配置
+        confFilePath = os.path.join(os.getcwd(), self.confFileName)
+        confDic = myUtils.readConfFile(confFilePath)
+        headerList = confDic["confHeader"]
+        reConfDic = {"confFilePath": confFilePath, "confHeaderList": headerList,
+                     "ifProxy": True if int(confDic[headerList[0]]) == 1 else False,
+                     "proxyIp": confDic[headerList[1]], "proxyPort": confDic[headerList[2]]}
+
+        # 更新代理设置
+        self.updateProxy(reConfDic["ifProxy"], reConfDic["proxyIp"], reConfDic["proxyPort"])
+
+        self.confDic = reConfDic
+
+    def openHelpWindow(self):
+        self.helpWindow.show()
+
+    def updateProxy(self, ifUse, ip, port):
+        proxy = QtNetwork.QNetworkProxy()
+        if ifUse:
+            proxy.setType(QtNetwork.QNetworkProxy.ProxyType.HttpProxy)
+            proxy.setHostName(ip)
+            proxy.setPort(port)
+        else:
+            proxy.setType(QtNetwork.QNetworkProxy.ProxyType.NoProxy)
+        QtNetwork.QNetworkProxy.setApplicationProxy(proxy)
 
 
 if __name__ == "__main__":

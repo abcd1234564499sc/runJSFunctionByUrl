@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1096</width>
-    <height>768</height>
+    <height>780</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -247,6 +247,20 @@
        </spacer>
       </item>
       <item>
+       <widget class="QPushButton" name="helpButton">
+        <property name="text">
+         <string>使用说明</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="configButton">
+        <property name="text">
+         <string>设置</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QPushButton" name="runButton">
         <property name="text">
          <string>运行</string>
@@ -258,7 +272,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget_2">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_4">
        <attribute name="title">
@@ -297,6 +311,16 @@
            <bool>true</bool>
           </property>
          </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="tab_6">
+       <attribute name="title">
+        <string>浏览器</string>
+       </attribute>
+       <layout class="QVBoxLayout" name="verticalLayout_8">
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_5"/>
         </item>
        </layout>
       </widget>
@@ -419,11 +443,45 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>helpButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>openHelpWindow()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>845</x>
+     <y>404</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>1093</x>
+     <y>538</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>configButton</sender>
+   <signal>clicked()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>openConfigWindow()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>937</x>
+     <y>410</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>1093</x>
+     <y>595</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>updateInputFormat()</slot>
   <slot>runJs()</slot>
   <slot>resetJsFunctionITextEdit()</slot>
   <slot>exportResult()</slot>
+  <slot>openHelpWindow()</slot>
+  <slot>openConfigWindow()</slot>
  </slots>
 </ui>

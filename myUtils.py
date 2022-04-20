@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # coding=utf-8
 import datetime
+import json
 import os
 import re
 import shutil
+import socket
 
 import openpyxl as oxl
 import requests
@@ -240,6 +242,9 @@ def writeExcellHead(ws, headArr):
 # fgColor表示该单元格的背景颜色，为一个RGB16进制字符串，默认为“FFFFFF”（白色）
 # otherAlign表示当ifAlign为False时指定的其他对齐方式，是一个数字型变量，默认为None，当其为0时表示左对齐，1为右对齐
 def writeExcellCell(ws, row, column, value, borderNum, ifAlign, hyperLink=None, fgColor="FFFFFF", otherAlign=None):
+    value = str(value)
+    ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+    value = ILLEGAL_CHARACTERS_RE.sub("", value)
     # 获得常用样式
     styleDic = getExcellStyleDic()
     # 获得指定单元格
@@ -338,3 +343,62 @@ def changeJsToString(jsStr):
                                                                                                                  "\\\\n").replace(
         "\"", "\\\"")
     return resultStr
+
+
+# 根据传入的contentDic写入配置文件，若配置文件不存在会创建
+# contentDic格式为：{"配置名":"配置值"}，
+# 对list和dict格式的值会使用json.dumps进行转换
+def writeToConfFile(filePath, contentDic):
+    with open(filePath, "w+", encoding="utf-8") as fr:
+        for key, value in contentDic.items():
+            if isinstance(value, list) or isinstance(value, dict):
+                value = json.dumps(value)
+            content = "{0}={1}".format(key, value)
+            fr.write(content + "\n")
+
+
+# 读取配置文件，生成一个配置字典，
+# 字典结构为：{"配置名":"配置值"}，
+# 文件结构为：配置名=配置值，对list和dict格式的值会使用json.loads进行转换
+# 配置字典的最后一项固定为"confHeader":配置名列表
+def readConfFile(filePath):
+    confDic = {}
+    headerList = []
+    with open(filePath, "r", encoding="utf-8") as fr:
+        fileLines = fr.readlines()
+    fileLines = [a.replace("\r\n", "\n").replace("\n", "") for a in fileLines if a != ""]
+    for fileLine in fileLines:
+        fileLine = fileLine.replace("\r\n", "\n").replace("\n", "")
+        tempList = fileLine.split("=")
+        key = tempList[0].strip()
+        value = "=".join(tempList[1:]).strip()
+        try:
+            value = json.loads(value)
+        except:
+            pass
+        confDic[key] = value
+        headerList.append(key)
+    confDic["confHeader"] = headerList
+
+    return confDic
+
+# 判断该字符串是否是IP，返回一个布尔值
+def ifIp(matchStr):
+    reFlag = True
+    ipReg = r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+    if re.match(ipReg, matchStr):
+        reFlag = True
+    else:
+        reFlag = False
+    return reFlag
+
+# 测试指定IP的指定端口是否能联通
+def connectIpPort(ip, port):
+    ifConnected = False
+    socketObj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = socketObj.connect_ex((ip, port))
+    if result == 0:
+        ifConnected = True
+    else:
+        ifConnected = False
+    return ifConnected
