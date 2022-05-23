@@ -15,6 +15,7 @@ from ExportExcellThread import ExportExcellThread
 from HelpWindow import HelpWindow
 from JsRunThreadManage import JsRunThreadManage
 from LoadBrowserThread import LoadBrowserThread
+from UpdateTableReusltThread import UpdateTableResultThread
 from ui.mainForm import Ui_MainWindow
 
 
@@ -32,10 +33,14 @@ class Main(QMainWindow, Ui_MainWindow):
         self.browser.loadFinished.connect(self.browserLoaded)
         self.browser.setObjectName("webView")
         self.horizontalLayout_5.addWidget(self.browser)
-        self.browserLoadThread = LoadBrowserThread()
-        self.threadManage = JsRunThreadManage()
         self.confFileName = "工具箱配置.conf"
         self.confHeadList = ["是否使用代理", "代理IP", "代理端口"]
+        # 初始化线程
+        self.browserLoadThread = LoadBrowserThread()
+        self.threadManage = JsRunThreadManage(browser=self.browser)
+        self.threadManage.signal_thread_result.connect(self.runJsThreadResultSolved)
+        self.threadManage.signal_thread_err.connect(self.runJsThreadErrSolved)
+        self.updateTableResultThread = UpdateTableResultThread(self.resultTable)
         # 设置结果表头
         self.resultHeaderList = ["序号", "输入", "输出"]
         self.resultTable.setColumnCount(len(self.resultHeaderList))
@@ -47,6 +52,9 @@ class Main(QMainWindow, Ui_MainWindow):
         self.confDic = self.initConfFile()
         self.confWindow = ConfigWindow(self.confDic)
         self.helpWindow = HelpWindow()
+        # 运行线程
+        self.threadManage.start()
+        self.updateTableResultThread.start()
 
     # 初始化配置文件，生成配置文件并返回一个配置字典
     # 字典结构为：{
@@ -152,7 +160,7 @@ class Main(QMainWindow, Ui_MainWindow):
         self.writeLog(logStr, 1)
 
     def resetJsFunctionITextEdit(self):
-        functionModelStr = ''' function process(nowInputVal){\n    var nowOutputVal = "";\n    nowInputVal=String(nowInputVal);\n    // 逻辑代码\n    nowOutputVal=nowInputVal;\n    \n    return nowOutputVal;\n}'''
+        functionModelStr = ''' function process(nowInputVal){\n    var nowOutputVal = "";\n    nowInputVal=String(nowInputVal);\n    // 逻辑代码\n    nowOutputVal=nowInputVal;\n    \n    return [nowInputVal,nowOutputVal];\n}'''
         self.jsFunTextEdit.setText(functionModelStr)
 
     def getInput(self):
@@ -241,10 +249,12 @@ class Main(QMainWindow, Ui_MainWindow):
         script.text = "{0}";
         document.body.appendChild(script);'''.format(nowJsFunction)
                 self.browser.page().runJavaScript(nowJsStr)
-                self.threadManage = JsRunThreadManage(self.inputFormattedList, self.browser)
-                self.threadManage.signal_result_log.connect(self.jsCallBack)
-                self.threadManage.signal_info_log.connect(self.writeLog)
-                self.threadManage.start()
+                for tmpIndex, tmpInput in enumerate(self.inputFormattedList):
+                    logStr = "使用输入值({1}/{2})：{0} 创建线程".format(tmpInput, tmpIndex + 1, len(self.inputFormattedList))
+                    self.threadManage.addInput(tmpInput)
+                    self.writeLog(logStr)
+                logStr = "线程创建完成，结果请前往输出tab查看"
+                self.writeLog(logStr)
             except Exception as ex:
                 logStr = "启动JS函数执行线程管理线程时出现异常：{0}".format(str(ex))
                 self.writeErrorLog(logStr)
@@ -253,15 +263,6 @@ class Main(QMainWindow, Ui_MainWindow):
             self.writeLog(logStr)
 
         # self.browser.page().runJavaScript(nowJsStr, self.jsCallBack)
-
-    def jsCallBack(self, inputStr, result):
-        nowTableRowCount = self.resultTable.rowCount()
-        self.resultTable.insertRow(nowTableRowCount)
-        self.resultTable.setItem(nowTableRowCount, 0, myUtils.createTableItem(str(nowTableRowCount + 1)))
-        # self.resultTable.setItem(nowTableRowCount, 1,
-        #                          myUtils.createTableItem(self.inputFormattedList[nowTableRowCount]))
-        self.resultTable.setItem(nowTableRowCount, 1, myUtils.createTableItem(inputStr))
-        self.resultTable.setItem(nowTableRowCount, 2, myUtils.createTableItem(result))
 
     def closeEvent(self, event):
         self.browser.close()
@@ -318,6 +319,19 @@ class Main(QMainWindow, Ui_MainWindow):
         else:
             proxy.setType(QtNetwork.QNetworkProxy.ProxyType.NoProxy)
         QtNetwork.QNetworkProxy.setApplicationProxy(proxy)
+
+    def runJsThreadResultSolved(self, resultDic):
+        nowInput = resultDic["input"]
+        nowResult = resultDic["result"]
+        self.updateTableResultThread.addResult(nowInput, nowResult)
+
+    def runJsThreadErrSolved(self, errDic):
+        nowErrInput = errDic["input"]["input"]
+        nowErrStr = errDic["errStr"]
+        errLog = "输入值为：{} 的线程运行时发生异常".format(nowErrInput)
+        self.writeErrorLog(errLog)
+        errLog = "异常日志为：{}".format(nowErrStr)
+        self.writeErrorLog(errLog)
 
 
 if __name__ == "__main__":

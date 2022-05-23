@@ -16,6 +16,9 @@ from bs4 import BeautifulSoup
 # 全局变量区域
 borderNumDic = {-1: None, 0: "thin"}
 
+
+from openpyxl.styles import Border, Side, Font, PatternFill
+
 # 访问URL,type表示请求类型，0为GET，1为POST，2为PUT
 # 返回值类型如下：
 # {
@@ -27,9 +30,6 @@ borderNumDic = {-1: None, 0: "thin"}
 # "status":访问的响应码，
 # "requestSeconed":访问耗时，单位为秒
 # }
-from openpyxl.styles import Border, Side, Font, PatternFill
-
-
 def requestsUrl(url, cookie={}, header={}, data={}, files=None, type=0, reqTimeout=10, readTimeout=10,
                 allow_redirects=False, session=None, proxy=""):
     proxies = None

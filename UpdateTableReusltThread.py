@@ -6,16 +6,17 @@ from queue import Queue
 
 from PyQt5.QtCore import QThread, pyqtSignal
 
+import myUtils
 
-class JsRunThread(QThread):
-    signal_result = pyqtSignal(dict)
+
+class UpdateTableResultThread(QThread):
     signal_err = pyqtSignal(dict)
 
-    def __init__(self, browser=None):
-        super(JsRunThread, self).__init__()
+    def __init__(self, tableWidget=None):
+        super(UpdateTableResultThread, self).__init__()
         self.queue = Queue()
         self.ifStopFlag = False
-        self.browser = browser
+        self.tableWidget = tableWidget
         self.threadStatus = 0  # 代表当前线程的状态，0为创建未运行，1为运行，2为中断(terminate)，3为运行后停止(stop)，-1为异常退出
         self.extraErrorInfo = ""  # 记录线程因异常退出后报错信息，只有当threadStatus为-1时才有值，平常为空字符串
 
@@ -27,10 +28,14 @@ class JsRunThread(QThread):
             while not self.ifStopFlag:
                 if self.runFlag and not self.queue.empty():
                     inputDic = self.queue.get()
-                    nowInput = inputDic["input"]
-                    nowInputFormat = nowInput.replace("\"", "\\\"")
-                    jsStr = "process(\"{0}\")".format(nowInputFormat)
-                    self.browser.page().runJavaScript(jsStr, self.solveResult)
+                    nowInputStr = inputDic["inputStr"]
+                    nowResult = inputDic["result"]
+
+                    nowTableRowCount = self.tableWidget.rowCount()
+                    self.tableWidget.insertRow(nowTableRowCount)
+                    self.tableWidget.setItem(nowTableRowCount, 0, myUtils.createTableItem(str(nowTableRowCount + 1)))
+                    self.tableWidget.setItem(nowTableRowCount, 1, myUtils.createTableItem(nowInputStr))
+                    self.tableWidget.setItem(nowTableRowCount, 2, myUtils.createTableItem(nowResult))
                 else:
                     time.sleep(1)
                     continue
@@ -40,8 +45,8 @@ class JsRunThread(QThread):
             errDic = {"input": inputDic, "errStr": self.extraErrorInfo, "threadObj": self}
             self.signal_err.emit(errDic)
 
-    def addInput(self, nowInput):
-        self.queue.put({"input": nowInput})
+    def addResult(self, inputStr, result):
+        self.queue.put({"inputStr": inputStr, "result": result})
 
     def terminateThread(self):
         self.runFlag = False
@@ -62,12 +67,8 @@ class JsRunThread(QThread):
     def getQueue(self):
         return self.queue
 
-    def setProxyDic(self, proxyDic=None):
-        self.proxyDic = proxyDic
+    def setTableWidget(self, tableWidget=None):
+        self.tableWidget = tableWidget
 
     def getThreadStatus(self):
         return self.threadStatus
-
-    def solveResult(self, result):
-        resultDic = {"input": result[0], "result": result[1]}
-        self.signal_result.emit(resultDic)
