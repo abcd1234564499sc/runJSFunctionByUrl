@@ -58,7 +58,7 @@ class ExportExcellThread(QThread):
                 # 指定数量行保存一次
                 if rowIndex != 0 and rowIndex % self.saveCount == 0:
                     myUtils.saveExcell(wb, saveName=filename)
-                    wb = oxl.open(filename)
+                    wb = oxl.load_workbook(filename+".xlsx")
                     ws = wb.get_sheet_by_name(wb.get_sheet_names()[0])
             # 设置列宽
             colWidthArr = [7, 20, 60]
