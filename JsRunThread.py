@@ -69,5 +69,8 @@ class JsRunThread(QThread):
         return self.threadStatus
 
     def solveResult(self, result):
-        resultDic = {"input": result[0], "result": result[1]}
-        self.signal_result.emit(resultDic)
+        try:
+            resultDic = {"input": result[0], "result": result[1]}
+            self.signal_result.emit(resultDic)
+        except:
+            pass

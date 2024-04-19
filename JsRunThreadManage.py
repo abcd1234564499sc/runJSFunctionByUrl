@@ -16,7 +16,7 @@ class JsRunThreadManage(QThread):
         super(JsRunThreadManage, self).__init__()
         self.maxThreadCount = maxThreadCount
         self.browser = browser
-        self.threadList = [self.createThread(browser=self.browser) for i in range(maxThreadCount)]
+        self.threadList = [self.createThread(browser = self.browser) for i in range(maxThreadCount)]
         self.nextAddThreadIndex = 0
         self.taskCount = 0
         self.taskCountLock = QMutex()

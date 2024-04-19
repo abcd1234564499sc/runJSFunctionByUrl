@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, QHeaderView
 
 import myUtils
 from ConfigWindow import ConfigWindow
+from ErrorSignalWebPageConsole import ErrorSignalWebPageConsole
 from ExportExcellThread import ExportExcellThread
 from HelpWindow import HelpWindow
 from JsRunThreadManage import JsRunThreadManage
@@ -29,6 +30,9 @@ class Main(QMainWindow, Ui_MainWindow):
         self.resetJsFunctionITextEdit()
         userAgent = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36"
         self.browser = QWebEngineView()
+        browserPage = ErrorSignalWebPageConsole(self.browser)
+        browserPage.signal_console_error.connect(self.jsConsoleErrorSolved)
+        self.browser.setPage(browserPage)
         self.browser.page().profile().setHttpUserAgent(userAgent)
         self.browser.loadFinished.connect(self.browserLoaded)
         self.browser.setObjectName("webView")
@@ -325,9 +329,14 @@ class Main(QMainWindow, Ui_MainWindow):
         nowResult = resultDic["result"]
         self.updateTableResultThread.addResult(nowInput, nowResult)
 
+    def jsConsoleErrorSolved(self,errorStr):
+        logStr = "Javascript函数调用发生异常，异常信息为：{}".format(errorStr)
+        self.writeLog("Javascript函数调用发生异常，请确认错误日志")
+        self.writeLog(logStr, 1)
+
     def runJsThreadErrSolved(self, errDic):
-        nowErrInput = errDic["input"]["input"]
         nowErrStr = errDic["errStr"]
+        nowErrInput = errDic["input"]["input"]
         errLog = "输入值为：{} 的线程运行时发生异常".format(nowErrInput)
         self.writeErrorLog(errLog)
         errLog = "异常日志为：{}".format(nowErrStr)
