@@ -14,7 +14,8 @@ let jsonStr = {
 "b":2  
 };  
 正确写法：  
-let jsonStr = {"a":1, "b":2}; 
+let jsonStr = {"a":1, "b":2};    
+PS3：经测试发现JS语句最后不加分号会提示：Uncaught SyntaxError: Invalid or unexpected token，在编写JS函数时需要注意分号问题   
     
 使用核心功能库：QtWebEngineWidgets    
 使用图形库：pyQt5    
