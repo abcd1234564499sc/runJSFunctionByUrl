@@ -4,9 +4,9 @@ import os
 import sys
 
 from PyQt5 import QtNetwork
-from PyQt5.QtCore import QUrl
+from PyQt5.QtCore import QUrl, QFile, QIODevice
 from PyQt5.QtGui import QTextCursor
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile, QWebEngineScript
 from PyQt5.QtWidgets import QMainWindow, QApplication, QHeaderView
 
 import myUtils
@@ -38,7 +38,8 @@ class Main(QMainWindow, Ui_MainWindow):
         self.browser.setObjectName("webView")
         self.horizontalLayout_5.addWidget(self.browser)
         self.confFileName = "工具箱配置.conf"
-        self.confHeadList = ["是否使用代理", "代理IP", "代理端口"]
+        self.confHeadList = ["是否使用代理", "代理IP", "代理端口", "是否启用外部引用JS", "外部引用JS文件夹路径"]
+        self.externalJSSuffixList = [".js"]
         # 初始化线程
         self.browserLoadThread = LoadBrowserThread()
         self.threadManage = JsRunThreadManage(browser=self.browser)
@@ -65,19 +66,28 @@ class Main(QMainWindow, Ui_MainWindow):
     # "confFileName":配置文件文件名,
     # "ifProxy":是否开启代理，
     # "proxyIp":代理IP,
-    # "proxyPort":代理端口
+    # "proxyPort":代理端口,
+    # "ifExternalJS":是否启用外部引用JS,
+    # "externalJSFolderPath":外部引用JS文件夹路径
     # }
     def initConfFile(self):
         defaultIfProxy = 0
         defaultProxyIp = ""
         defaultProxyPort = ""
+        defaultIfExternalJS = 1
+        defaultExternalJSFolderPath = os.path.join(os.getcwd(), "引用外部JS文件")
         defaultConfHeaderList = self.confHeadList
         confDic = {defaultConfHeaderList[0]: defaultIfProxy, defaultConfHeaderList[1]: defaultProxyIp,
-                   defaultConfHeaderList[2]: defaultProxyPort}
+                   defaultConfHeaderList[2]: defaultProxyPort,
+                   defaultConfHeaderList[3]: defaultIfExternalJS,
+                   defaultConfHeaderList[4]: defaultExternalJSFolderPath}
 
         # 判断是否存在配置文件
         confFilePath = os.path.join(os.getcwd(), self.confFileName)
         if not os.path.exists(confFilePath):
+            # 创建配置文件的同时初始化默认外部引用JS文件夹
+            if not os.path.exists(defaultExternalJSFolderPath):
+                os.makedirs(defaultExternalJSFolderPath)
             myUtils.writeToConfFile(confFilePath, confDic)
             confDic["confHeader"] = defaultConfHeaderList
         else:
@@ -86,7 +96,9 @@ class Main(QMainWindow, Ui_MainWindow):
 
         reConfDic = {"confFilePath": confFilePath, "confHeaderList": headerList,
                      "ifProxy": True if int(confDic[headerList[0]]) == 1 else False,
-                     "proxyIp": confDic[headerList[1]], "proxyPort": confDic[headerList[2]]}
+                     "proxyIp": confDic[headerList[1]], "proxyPort": confDic[headerList[2]],
+                     "ifExternalJS": True if int(confDic[headerList[3]]) == 1 else False,
+                     "externalJSFolderPath": confDic[headerList[4]]}
 
         # 更新代理设置
         self.updateProxy(reConfDic["ifProxy"], reConfDic["proxyIp"], reConfDic["proxyPort"])
@@ -226,6 +238,14 @@ class Main(QMainWindow, Ui_MainWindow):
         return ifAddFlag, nowCoordinate
 
     def runJs(self):
+        # 加载外部引用JS
+        logStr = "开始加载外部引用JS"
+        self.writeLog(logStr)
+        self.updateExternalJSFolder(self.confDic["ifExternalJS"], self.confDic["externalJSFolderPath"])
+
+        logStr = "完成加载外部引用JS"
+        self.writeLog(logStr)
+
         checkFlag, checkStr = self.checkInput()
         if not checkFlag:
             self.writeErrorLog(checkStr)
@@ -254,7 +274,8 @@ class Main(QMainWindow, Ui_MainWindow):
         document.body.appendChild(script);'''.format(nowJsFunction)
                 self.browser.page().runJavaScript(nowJsStr)
                 for tmpIndex, tmpInput in enumerate(self.inputFormattedList):
-                    logStr = "使用输入值({1}/{2})：{0} 创建线程".format(tmpInput, tmpIndex + 1, len(self.inputFormattedList))
+                    logStr = "使用输入值({1}/{2})：{0} 创建线程".format(tmpInput, tmpIndex + 1,
+                                                                       len(self.inputFormattedList))
                     self.threadManage.addInput(tmpInput)
                     self.writeLog(logStr)
                 logStr = "线程创建完成，结果请前往输出tab查看"
@@ -304,7 +325,9 @@ class Main(QMainWindow, Ui_MainWindow):
         headerList = confDic["confHeader"]
         reConfDic = {"confFilePath": confFilePath, "confHeaderList": headerList,
                      "ifProxy": True if int(confDic[headerList[0]]) == 1 else False,
-                     "proxyIp": confDic[headerList[1]], "proxyPort": confDic[headerList[2]]}
+                     "proxyIp": confDic[headerList[1]], "proxyPort": confDic[headerList[2]],
+                     "ifExternalJS": True if int(confDic[headerList[3]]) == 1 else False,
+                     "externalJSFolderPath": confDic[headerList[4]]}
 
         # 更新代理设置
         self.updateProxy(reConfDic["ifProxy"], reConfDic["proxyIp"], reConfDic["proxyPort"])
@@ -324,12 +347,61 @@ class Main(QMainWindow, Ui_MainWindow):
             proxy.setType(QtNetwork.QNetworkProxy.ProxyType.NoProxy)
         QtNetwork.QNetworkProxy.setApplicationProxy(proxy)
 
+    # 返回指定文件夹中所有满足传入后缀名的文件路径，会递归检查其中的所有文件夹
+    def getJSFilePathInFolder(self, folderPath, suffixList):
+        reList = []
+        tmpFilesList = os.listdir(folderPath)
+        for tmpFileName in tmpFilesList:
+            tmpFilePath = os.path.join(folderPath, tmpFileName)
+
+            if os.path.isdir(tmpFilePath):
+                # 文件夹的情况
+                reList = reList + self.getJSFilePathInFolder(tmpFilePath, suffixList)
+            else:
+                # 文件的情况
+                tmpSuffix = os.path.splitext(tmpFileName)[1]
+                if tmpSuffix in suffixList:
+                    reList.append(tmpFilePath)
+                else:
+                    pass
+
+        return reList
+
+    def updateExternalJSFolder(self, ifExternalJS, folderPath):
+        self.browser.page().profile().scripts().clear()
+
+        if ifExternalJS:
+            # 读取文件夹
+            tmpFilePathList = self.getJSFilePathInFolder(folderPath, self.externalJSSuffixList)
+
+            # 读取文件并传入
+            for tmpFilePath in tmpFilePathList:
+                tmpFileName = os.path.basename(tmpFilePath)
+                tmpScript = QWebEngineScript()
+                tmpScriptFile = QFile(tmpFilePath)
+                if tmpScriptFile.open(QIODevice.ReadOnly):
+                    tmpScriptContent = tmpScriptFile.readAll()
+                    tmpScriptFile.close()
+                    tmpScript.setSourceCode(tmpScriptContent.data().decode())
+                    tmpScript.setName(tmpFileName)
+                    tmpScript.setWorldId(QWebEngineScript.MainWorld)
+                    tmpScript.setInjectionPoint(QWebEngineScript.DocumentReady)  # 在DOM READY的时候注入。也可以在开始的时候注入。
+                    self.browser.page().profile().scripts().insert(tmpScript)
+                    logstr = "加载JS文件：{}".format(tmpFileName)
+                    self.writeLog(logstr)
+                else:
+                    logstr = "读取JS文件失败，文件名为：{}".format(tmpFileName)
+                    self.writeErrorLog(logstr)
+        else:
+            logStr = "未启用加载外部引用JS选项，如需使用请在设置中开启"
+            self.writeLog(logStr)
+
     def runJsThreadResultSolved(self, resultDic):
         nowInput = resultDic["input"]
         nowResult = resultDic["result"]
         self.updateTableResultThread.addResult(nowInput, nowResult)
 
-    def jsConsoleErrorSolved(self,errorStr):
+    def jsConsoleErrorSolved(self, errorStr):
         logStr = "Javascript函数调用发生异常，异常信息为：{}".format(errorStr)
         self.writeLog("Javascript函数调用发生异常，请确认错误日志")
         self.writeLog(logStr, 1)
